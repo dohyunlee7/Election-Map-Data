@@ -1,0 +1,120 @@
+---
+title: "Lab03 Write-Up"
+author: "Dohyun Lee"
+output: 
+  pdf_document: 
+    highlight: pygments
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r}
+library(tidyverse)
+library(maps)
+library(mapproj)
+library(socviz)
+library(ggthemes)
+```
+
+### Load Data
+
+```{r load_data}
+county_level_2020 = read_csv("https://raw.githubusercontent.com/tonmcg/US_County_Level_Election_Results_08-20/master/2020_US_County_Level_Presidential_Results.csv")
+
+state_level_2020 = county_level_2020 %>%
+  group_by(state_name) %>%
+  summarize(gop_votes = sum(votes_gop),
+         dem_votes = sum(votes_dem),
+         total_votes = sum(total_votes),
+         diff = sum(diff)) %>%
+  mutate(
+    pct_gop = gop_votes/total_votes,
+    pct_dem = dem_votes/total_votes,
+  ) %>%
+  ungroup()
+
+state_level_2020
+```
+
+## Part 1: Replicating 2016 maps using 2020 data
+
+### Replication 1
+
+```{r rep1}
+#load state geography data
+us_states <- map_data("state")
+
+#define colors for parties
+party_colors <- c("#2E74C0", "#CB454A")
+
+#add binary party variable
+state_level_2020$party <- ifelse(state_level_2020$diff > 0, c("Republican"), c("Democrat"))
+
+state_level_2020$region <- tolower(state_level_2020$state_name)
+us_states_elec <- left_join(us_states, state_level_2020, by = "region")
+
+p0 <- ggplot(data = us_states_elec,
+            mapping = aes(x = long, y = lat,
+                          group = group, fill = party))
+
+p1 <- p0 + geom_polygon(color = "gray90", size = 0.1) +
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45)
+  
+p2 <- p1 + scale_fill_manual(values = party_colors) +
+  labs(title = "2020 Election Results", fill = NULL)
+
+p2 + theme_map()
+```
+
+### Replication 2
+
+```{r}
+us_states_elec$d_points <- (us_states_elec$pct_dem - us_states_elec$pct_gop) * 100
+
+p0 <- ggplot(data = subset(us_states_elec,
+             region %nin% "district of columbia"),
+            mapping = aes(x = long, y = lat,
+                          group = group, fill = d_points))
+
+p1 <- p0 + geom_polygon(color = "gray90", size = 0.1) +
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45)
+
+p2 <- p1 + scale_fill_gradient2(low = "red",
+                                mid = scales::muted("purple"),
+                                high = "blue") +
+  labs(title = "Winning Margins")
+
+p2 + theme_map() + labs(fill = "Percent")
+```
+
+### Replication 3
+
+```{r}
+library(statebins)
+ statebins(state_data = us_states_elec,
+          state_col = "state_name", 
+          value_col = "pct_gop*100",
+          dark_label = "white",
+          light_label = "white",
+          palette = "Reds",
+          direction = 1,
+          font_size = 3) +
+          labs(fill="Percent Trump")+
+          theme_statebins()
+```
+
+## Part 2: Option 1
+
+```{r}
+p0 <- ggplot(data = us_states_elec,
+            mapping = aes(x = long, y = lat,
+                          group = group, fill = pct_dem * 100))
+
+p1 <- p0 + geom_polygon(color = "gray90", size = 0.1) +
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45)
+
+p2 <- p1 + scale_fill_gradient(low = "white", high = "#00AD45") +
+  labs(title = "Biden Votes")
+
+p2 + theme_map() + labs(fill = "Percent")
+```
